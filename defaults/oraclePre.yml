@@ -6,9 +6,9 @@
   sudo: True
 
   vars:
-    oracle_repository: /home/angelo/vagrantVM/repo/Software/oracle
-    jdk_i586: jdk-7u55-linux-i586.rpm
-    jdk_x64: jdk-7u55-linux-x64.rpm
+    oracle_repository: /opt/repo/oracle
+    jdk_i586: jdk-linux-i586.rpm
+    jdk_x64: jdk-linux-x64.rpm
 
   tasks:
 
