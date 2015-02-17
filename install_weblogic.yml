@@ -5,7 +5,7 @@
   sudo: True
 
   vars:
-    oracle_repository: /home/angelo/vagrantVM/repo/Software/oracle
+    oracle_repository: /opt/repo
 
     beahome: "/opt/oracle/weblogic"
     beahomeESCAPE: \/opt\/oracle\/weblogic
