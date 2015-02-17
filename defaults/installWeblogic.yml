@@ -5,7 +5,7 @@
   sudo: True
 
   vars:
-    oracle_repository: /home/angelo/DevOps/repo/oracle
+    oracle_repository: /opt/repo/oracle
 
     beahome: "/opt/oracle/weblogic"
     beahomeESCAPE: \/opt\/oracle\/weblogic
