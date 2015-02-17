@@ -5,7 +5,7 @@
   sudo: True
 
   vars:
-    oracle_repository: /opt/repo
+    oracle_repository: /home/angelo/DevOps/repo/oracle
 
     beahome: "/opt/oracle/weblogic"
     beahomeESCAPE: \/opt\/oracle\/weblogic
@@ -35,7 +35,7 @@
   - name: directory /opt/oracle owned by weblogic
     file: path=/opt/oracle owner=weblogic group=weblogic state=directory
   - name: push user environment
-    copy: src=files/silentsites_weblogic.sh dest=/etc/profile.d/weblogic.sh
+    copy: src=../files/silentWeblogic.sh dest=/etc/profile.d/weblogic.sh
       owner=root group=root mode=0644
 
   - name: check file {{ wlsjar }} 
@@ -47,7 +47,7 @@
     when: check_file_wls.stat.exists == false
 
   - name: silent.xml for weblogic silent installation
-    copy: src=./files/silent.xml dest={{ weblogicuserhome }}/silent.xml
+    copy: src=../files/silent.xml dest={{ weblogicuserhome }}/silent.xml
       force=yes
   - name: parameters in file silent.xml beahome 
     shell: ' perl -p -i -e "s/<%= beahome %>/{{ beahomeESCAPE }}/g" /home/weblogic/silent.xml '
@@ -55,7 +55,7 @@
     shell: ' perl -p -i -e "s/<%= wlsinstalldir %>/{{ wlsinstalldirESCAPE }}/g" /home/weblogic/silent.xml '
 
   - name: get latest files for silent create domain= silentconf.xml
-    copy: src=./files/silentconf.xml dest={{ weblogicuserhome }}/silentconf.xml
+    copy: src=../files/silentconf.xml dest={{ weblogicuserhome }}/silentconf.xml
       force=yes
 
   - name: dir within /opt/oracle/weblogic =beahome owned by weblogic.weblogic
@@ -90,7 +90,7 @@
     file: path=/var/log/weblogic owner=weblogic group=weblogic state=directory mode=755
 
   - name: weblogic service so need /etc/init.d/weblogic
-    copy: src=./files/etc_init.d_weblogic dest=/etc/init.d/weblogic
+    copy: src=../files/etc_init.d_weblogic dest=/etc/init.d/weblogic
       owner=root group=root mode=0755
   - name: service to be activated but not started, yet (later, after domain creation)
     service: name=weblogic  enabled=yes pattern=weblogic.Server

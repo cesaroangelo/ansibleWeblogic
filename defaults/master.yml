@@ -1,0 +1,17 @@
+---
+# align everything, running all stable playbooks in sequence
+
+    # tasks:
+
+    - include: oraclePre.yml
+    - include: installWeblogic.yml
+    - include: createDomain.yml
+
+#    - include: create_dbuser.yml
+
+#    - include: create_datasource.yml
+
+#    - include: create_sites_master_part1.yml
+#    - include: create_sites_master_part2.yml
+
+    # - include: create_satellite.yml
