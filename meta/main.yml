@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  author: Angelo Cesaro
+  license: GPLv2
+  min_ansible_version: 1.4
+  platforms:
+    - name: CentOS
+      versions:
+        - 6.x x64
+        - 6.x i386
+    - name: Red Hat Enterprise Linux
+      versions:
+        - 6.x x64
+        - 6.x i386
+  categories:
+     - web
+dependencies: []
