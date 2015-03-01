@@ -6,7 +6,3 @@
     - include: oraclePre.yml
     - include: installWeblogic.yml
     - include: createDomain.yml
-    - include: createDBUser.yml
-    - include: createDataSource.yml
-    - include: createSitesPart1.yml
-    - include: createSitesPart2.yml
