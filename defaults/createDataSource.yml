@@ -1,0 +1,87 @@
+---
+- hosts: all
+
+  remote_user: vagrant
+  sudo: True
+
+  vars:
+    wlsinstalldir: "/opt/oracle/weblogic/wlserver_10.3"
+
+    weblogicuserhome: "/home/weblogic"
+
+    createdatasourcepy: "createDataSource.py"
+    detailsproperties: "details.properties"
+
+    # now set with lineinfile, later as a template
+    #datasourceuser: ORACLEUSER
+    #datasourcepass: ORACLEPASS
+    datasourceuser: CMS
+    datasourcepass: CMS
+
+  tasks:
+
+  - name: stop weblogic
+    service: name=weblogic state=stopped pattern=weblogic.Server
+
+  - name: Waiting port 7001 to be closed or Timeout Failure
+    wait_for: port=7001 delay=3 timeout=60 state=stopped
+    register: timeout_port_7001
+    failed_when: timeout_port_7001.elapsed > 55
+
+  - name: check if weblogic is running
+    service: name=weblogic state=started enabled=yes pattern=weblogic.Server
+
+  - name: Waiting port 7001 to be open or Timeout Failure
+    wait_for: port=7001 delay=2 timeout=120 state=started
+    register: timeout_port_7001
+    failed_when: timeout_port_7001.elapsed > 115
+  - name: Check if WebLogic is running
+    shell: service weblogic status | true
+    register: weblogic_is_running
+    failed_when: weblogic_is_running.stdout == "weblogic is stopped"
+
+  - name: need file createDataSource.py in {{ weblogicuserhome }}
+    copy: src=../files/createDatasource_createDataSource.py dest={{ weblogicuserhome }}/createDataSource.py
+      owner=weblogic  group=weblogic mode=0644
+  - name: need file createDataSource.sh in {{ weblogicuserhome }} to test existing datasource 20140616
+    copy: src=../files/createDatasource_testDataSource.sh dest={{ weblogicuserhome }}/testDataSource.sh
+      owner=weblogic  group=weblogic mode=0755
+  - name: need file details.properties in {{ weblogicuserhome }}
+    copy: src=../files/createDatasource_details.properties dest={{ weblogicuserhome }}/details.properties
+      owner=weblogic  group=weblogic mode=0644
+
+  - name: force parameters for detail.properties
+    lineinfile: dest={{ weblogicuserhome }}/details.properties regexp=^datasource.username= line=datasource.username={{ datasourceuser }}
+    lineinfile: dest={{ weblogicuserhome }}/details.properties regexp=^datasource.password= line=datasource.password={{ datasourcepass }}
+
+  - name: grep port 7001
+    shell: netstat -an|grep 7001
+    register: netstatgrep7001
+    ignore_errors: yes
+  - debug: var=netstatgrep7001.stdout
+
+  - name: wait for localhost:7001 to be open within 1minute or Timeout Failure
+    wait_for: port=7001 delay=1 timeout=60
+    register: timeout_port_7001
+    failed_when: timeout_port_7001.elapsed > 59
+
+  - name: grep port 7001
+    shell: netstat -an|grep 7001
+    register: netstatgrep7001
+    ignore_errors: yes
+  - debug: var=netstatgrep7001.stdout
+
+  - name: check data source before creation
+    shell: " su - weblogic -c ' {{ weblogicuserhome}}/testDataSource.sh  ' "
+    register: check_ds_response_before
+    ignore_errors: yes
+
+  - name: create data source (if not exist)
+    shell: " su - weblogic -c '  java weblogic.WLST ./createDataSource.py ' "
+    when: check_ds_response_before.stdout.find('Pool csDataSource does not exist') != -1
+
+  - name: now check data source, must exist
+    shell: " su - weblogic -c ' {{ weblogicuserhome}}/testDataSource.sh  ' "
+    register: check_ds_response_after
+  - fail: DataSource not yet created
+    when: "'JDBC Connection Test Succeeded for connection pool' not in check_ds_response_after.stdout"

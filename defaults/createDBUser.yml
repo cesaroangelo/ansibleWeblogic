@@ -1,0 +1,34 @@
+---
+- hosts: all
+
+  vars:
+    oracleuser: CMS
+    oraclepass: CMS
+    TEMPoracleuser: ORACLEUSER
+    TEMPoraclepass: ORACLEPASS
+    TEMPoraclexehost: localhost.localdomain
+
+  tasks:
+
+  - name: copy the script files/oracleDBCreateUser.sql to the oracledb
+    copy: src=../files/oracleDBCreateUser.sql  dest=/tmp/oracleDBCreateUser.sql
+      owner=root group=root mode=0755
+      force=yes
+
+  - name: copy the new listener.ora to the oracle folder
+    copy: src=../files/listener.ora dest=/u01/app/oracle/product/11.2.0/xe/network/admin/listener.ora
+      owner=oracle group=dba mode=0755
+      force=yes
+  - name: patch the listener.ora with new hostname
+    shell: ' perl -p -i -e "s/{{ TEMPoraclexehost }}/{{ ansible_fqdn }}/g" /u01/app/oracle/product/11.2.0/xe/network/admin/listener.ora '
+
+  - name: patch the sql file with db user
+    shell: ' perl -p -i -e "s/{{ TEMPoracleuser }}/{{ oracleuser }}/g" /tmp/oracleDBCreateUser.sql '
+  - name: patch the sql file with db password
+    shell: ' perl -p -i -e "s/{{ TEMPoraclepass }}/{{ oraclepass }}/g" /tmp/oracleDBCreateUser.sql '  
+
+  - name: restart oracle-xe
+    shell: ' sudo service oracle-xe restart '
+
+  - name: execute the sql script on oracledb server
+    shell: ' sudo -u vagrant -i sqlplus sys/sa as sysdba@localhost/XE @/tmp/oracleDBCreateUser.sql '

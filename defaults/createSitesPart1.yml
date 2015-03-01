@@ -1,0 +1,121 @@
+---
+- hosts: all
+
+  remote_user: vagrant
+  sudo: True
+
+  vars:
+    sit_inst_dir: "/home/weblogic/sit_inst"
+    sites_install_dir: "/home/weblogic/sit_inst/WebCenterSites_11.1.1.8.0/WCS_Sites/Sites/"
+
+    weblogicuserhome: "/home/weblogic"
+    oracle_repository: /home/angelo/vagrantVM/repo/Software/oracle
+
+    default_gw: "10.1.1.1"
+    default_dns: "10.1.1.1"
+
+  tasks:
+
+  - name: upload script to detect weblogic
+    copy: src=../files/appStatus.py dest={{ weblogicuserhome }}/appStatus.py
+      owner=weblogic group=weblogic backup=yes
+  - name: upload script to undeploy CS and cas, to be run manually
+    copy: src=../files/unDeploy.py dest={{ weblogicuserhome }}/unDeploy.py
+      owner=weblogic group=weblogic backup=yes
+
+  - name: Check if CS/cas are already deployed
+    shell: " su - weblogic -c ' java weblogic.WLST ./appStatus.py' "
+    register: check_cscas
+  - fail: STOP - CS and cas FAILED
+    when: "'CS = STATE_FAILED' in check_cscas.stdout and 'cas = STATE_FAILED' in check_cscas.stdout"
+  - fail: STOP - CS is up and running, cas doesnt
+    when: "'CS = STATE_ACTIVE' in check_cscas.stdout and 'cas = STATE_FAILED' in check_cscas.stdout"
+  - fail: STOP - cas is up and running, CS doesnt
+    when: "'CS = STATE_FAILED' in check_cscas.stdout and 'cas = STATE_ACTIVE' in check_cscas.stdout"
+  - fail: STOP - CS and cas are already up and running
+    when: "'CS = STATE_ACTIVE' in check_cscas.stdout and 'cas = STATE_ACTIVE' in check_cscas.stdout"
+
+  - name: ensure installation dir {{ sit_inst_dir }}
+    file: path={{ sit_inst_dir }} owner=weblogic group=weblogic state=directory recurse=yes mode=755
+  - name: ensure file wcssites_ofm_sites_generic_11.1.1.8.0_disk1_1of1.zip
+    copy: src={{ oracle_repository }}/wcssites_ofm_sites_generic_11.1.1.8.0_disk1_1of1.zip  
+      dest={{ sit_inst_dir }}/ofm_sites_generic_11.1.1.8.0_disk1_1of1.zip
+      owner=weblogic group=weblogic mode=0644
+  - name: unzip ofm_sites_generic
+    shell: unzip -u -q ofm_sites_generic_11.1.1.8.0_disk1_1of1.zip chdir={{ sit_inst_dir }}
+  - name: unzip Wcs_Sites.zip
+    shell: unzip -u -q WCS_Sites.zip
+      chdir={{ sit_inst_dir }}/WebCenterSites_11.1.1.8.0/WCS_Sites
+  - name: file install_pre.ini
+    copy: src=../files/master_install_pre.ini dest={{ sites_install_dir }}/install_pre.ini
+  - name: file install_post.ini
+    copy: src=../files/master_install_post.ini dest={{ sites_install_dir }}/install_post.ini
+
+  - name: file omii.ini
+    # copy: src=./files/cluster_omii.ini dest={{ sites_install_dir }}/omii.ini
+    # ################## usare SSD_OMII per la master, CLUSTER_OMII per le slave
+    # ################## no, ancora diverso, ricevuti due omii.ini specifici (da patchare con gli IP)
+    # copy: src=./files/ssd_omii.ini dest={{ sites_install_dir }}/omii.ini
+    template: src=../files/omii_master.ini_TEMPLATE dest={{ sites_install_dir }}/omii.ini backup=yes
+    # 2do: replace in template own IP (=master) or NFS IP (=slave)
+    # master= should be: {{ hostvars[host]['ansible_' + iface].ipv4.address }}
+    # slave= {{ ipMasterNFS }}
+
+  - name: file ssd_deployMultiple.py
+    copy: src=../files/ssd_deployMultiple.py dest={{ sites_install_dir }}/deployMultiple.py
+  - name: ensure installation dir owner
+    file: path={{ sit_inst_dir }} owner=weblogic group=weblogic state=directory recurse=yes mode=755
+
+  - name: env javaoptions in /opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/startWebLogic.sh
+    lineinfile: dest=/opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/startWebLogic.sh
+      insertafter="^# Call setDomainEnv here.$"
+      line='export JAVA_OPTIONS="-Djava.io.tmpdir=/opt/oracle/weblogic/user_projects/domains/SitesDomain/servers/AdminServer/tmp -Dfile.encoding=UTF-8 -Dnet.sf.ehcache.enableShutdownHook=true -Djava.net.preferIPv4Stack=true -Dorg.owasp.esapi.resources=/opt/oracle/sites/CS/WEB-INF/classes -Djava.security.egd=file:/dev/./urandom"' state=present
+      backup=yes
+
+  - name: env classpath in /opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/startWebLogic.sh
+    lineinfile: dest=/opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/startWebLogic.sh
+      insertafter="^# Call setDomainEnv here.$"
+      line='export CLASSPATH="/opt/oracle/weblogic/user_projects/domains/SitesDomain/bin:/opt/oracle/sites/home/bin"' state=present
+      backup=yes
+  - name: env pre_classpath in /opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+    lineinfile: dest=/opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+      insertafter="^WLS_HOME="
+      line='export PRE_CLASSPATH="/opt/oracle/sites/CS/WEB-INF/lib/jstl-api-1.2.jar:/opt/oracle/sites/CS/WEB-INF/lib/log4j-1.2.16.jar:/opt/oracle/sites/CS/WEB-INF/lib/MSXML.jar:/opt/oracle/sites/CS/WEB-INF/lib/commons-lang-2.4.jar"' state=present
+      backup=yes
+
+  - name: MEM_PERM_SIZE_64BIT=-XX:PermSize=512m in /opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+    lineinfile: dest=/opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+      regexp='^MEM_PERM_SIZE_64BIT=' 
+      line='MEM_PERM_SIZE_64BIT=-XX:PermSize=512m'
+  - name: MEM_PERM_SIZE_32BIT=-XX:PermSize=512m in /opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+    lineinfile: dest=/opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+      regexp='^MEM_PERM_SIZE_32BIT=' 
+      line='MEM_PERM_SIZE_32BIT=-XX:PermSize=512m'
+  - name: MEM_MAX_PERM_SIZE_64BIT=-XX:MaxPermSize=1024m in /opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+    lineinfile: dest=/opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+      regexp='^MEM_MAX_PERM_SIZE_64BIT=' 
+      line='MEM_MAX_PERM_SIZE_64BIT=-XX:MaxPermSize=1024m'
+  - name: MEM_MAX_PERM_SIZE_32BIT=-XX:MaxPermSize=1024m in /opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+    lineinfile: dest=/opt/oracle/weblogic/user_projects/domains/SitesDomain/bin/setDomainEnv.sh
+      regexp='^MEM_MAX_PERM_SIZE_32BIT=' 
+      line='MEM_MAX_PERM_SIZE_32BIT=-XX:MaxPermSize=1024m'
+
+  - name: stop weblogic 
+    service: name=weblogic state=stopped pattern=weblogic.Server
+
+  - name: Waiting port 7001 to be closed or Timeout Failure
+    wait_for: port=7001 delay=3 timeout=60 state=stopped
+    register: timeout_port_7001
+    failed_when: timeout_port_7001.elapsed > 55
+
+  - name: start weblogic  
+    service: name=weblogic state=started pattern=weblogic.Server
+
+  - name: Waiting port 7001 to be open or Timeout Failure
+    wait_for: port=7001 delay=3 timeout=120 state=started
+    register: timeout_port_7001
+    failed_when: timeout_port_7001.elapsed > 115
+  - name: Check if WebLogic is running 
+    shell: service weblogic status | true
+    register: weblogic_is_running
+    failed_when: weblogic_is_running.stdout == "weblogic is stopped"
