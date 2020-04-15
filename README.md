@@ -13,7 +13,7 @@ Those files will have to be in "oracle_repository: /opt/repo/oracle"
 
 License
 -------
-GPLv2
+GPLv3
 
 Author Information
 ------------------
